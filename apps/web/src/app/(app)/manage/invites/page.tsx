@@ -33,7 +33,7 @@ const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }
 };
 
 export default function ManageInvitesPage() {
-  const { activeMembership, isAdmin } = useAuth();
+  const { activeMembership, isAdmin, user } = useAuth();
   const supabase = createClient();
   const communityId = activeMembership?.community_id;
 
@@ -106,7 +106,7 @@ export default function ManageInvitesPage() {
         unit_id: formUnitId || null,
         role: formRole,
         resident_type: formUnitId ? formResidentType : null,
-        invited_by: activeMembership?.user_id || '',
+        invited_by: user?.id || '',
       })
       .select('token, email')
       .single();

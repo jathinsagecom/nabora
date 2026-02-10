@@ -3,7 +3,8 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "start": "npx nx dev web"
+    "start": "npx nx dev web",
+    "build": "npx nx build web --prod"
   },
   "private": true,
   "devDependencies": {

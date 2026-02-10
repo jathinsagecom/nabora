@@ -35,6 +35,7 @@ export interface UserProfile {
   avatar_url: string | null;
   is_super_admin: boolean;
   is_active: boolean;
+  created_at: string;
 }
 
 export interface Residency {

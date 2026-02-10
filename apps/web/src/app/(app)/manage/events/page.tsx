@@ -86,7 +86,7 @@ export default function ManageEventsPage() {
       .from('user_communities')
       .select('user_id, user:users(id, full_name, email, phone)')
       .eq('community_id', communityId);
-    if (memberData) setMembers(memberData);
+    if (memberData) setMembers(memberData.map((m: any) => ({ user_id: m.user_id, user: Array.isArray(m.user) ? m.user[0] || null : m.user })));
 
     setLoading(false);
   }, [communityId]);
