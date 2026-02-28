@@ -155,3 +155,15 @@ a:hover { opacity: 0.8; }
 @media (max-width: 480px) {
   .booking-details-row { flex-direction: column; align-items: flex-start; gap: 4px; }
 }
+
+/* Issues layout */
+.issue-detail-layout { display: flex; gap: 20px; align-items: flex-start; }
+.issue-detail-sidebar { width: 240px; flex-shrink: 0; }
+.issue-filters-bar select { min-width: 120px; }
+
+@media (max-width: 768px) {
+  .issue-detail-layout { flex-direction: column-reverse; }
+  .issue-detail-sidebar { width: 100% !important; }
+  .issue-filters-bar { flex-direction: column; }
+  .issue-filters-bar input, .issue-filters-bar select { width: 100%; }
+}

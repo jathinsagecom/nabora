@@ -32,6 +32,15 @@ export const navItems: NavItem[] = [
     showInBottomBar: true,
   },
   {
+    label: 'Issue Reporting',
+    href: '/issues',
+    icon: '🔧',
+    activeIcon: '🔧',
+    section: 'main',
+    role: null,
+    showInBottomBar: true,
+  },
+  {
     label: 'Events',
     href: '/events',
     icon: '◇',
@@ -49,7 +58,7 @@ export const navItems: NavItem[] = [
     section: 'main',
     role: null,
     feature: 'tips',
-    showInBottomBar: true,
+    showInBottomBar: false,
   },
   {
     label: 'Facilities',
