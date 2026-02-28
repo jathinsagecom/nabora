@@ -49,6 +49,7 @@ export interface Residency {
     unit_number: string;
     floor: string | null;
     unit_type: string | null;
+    community_id: string;
   };
 }
 
@@ -152,7 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Fetch current residencies
     const { data: residencyData } = await supabase
       .from('residencies')
-      .select('*, unit:units(id, unit_number, floor, unit_type)')
+      .select('*, unit:units(id, unit_number, floor, unit_type, community_id)')
       .eq('user_id', user.id)
       .eq('is_current', true);
 
