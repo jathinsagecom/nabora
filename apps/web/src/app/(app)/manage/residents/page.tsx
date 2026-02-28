@@ -119,7 +119,12 @@ export default function ManageResidentsPage() {
       .eq('is_active', true)
       .order('unit_number');
 
-    if (unitData) setUnits(unitData);
+    if (unitData) {
+      setUnits(unitData.map((u: any) => ({
+        ...u,
+        unit_type: Array.isArray(u.unit_type) ? u.unit_type[0] || null : u.unit_type,
+      })));
+    }
 
     setLoading(false);
   }, [communityId]);
