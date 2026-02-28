@@ -139,11 +139,11 @@ export function MobileHeader() {
 
 export function BottomBar() {
   const pathname = usePathname();
-  const { role, isSuperAdmin, features, profile, signOut } = useAuth();
+  const { role, isSuperAdmin, features, profile, activeMembership, signOut } = useAuth();
   const [moreOpen, setMoreOpen] = useState(false);
 
-  const bottomItems = getBottomBarItems(role, isSuperAdmin, features);
-  const allItems = getVisibleNavItems(role, isSuperAdmin, features);
+  const bottomItems = getBottomBarItems(role, isSuperAdmin, features, !!activeMembership);
+  const allItems = getVisibleNavItems(role, isSuperAdmin, features, !!activeMembership);
   const moreItems = allItems.filter(
     (item) => !item.showInBottomBar || item.section !== 'main'
   );

@@ -25,7 +25,7 @@ export function Sidebar() {
 
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
-  const visibleItems = getVisibleNavItems(role, isSuperAdmin, features);
+  const visibleItems = getVisibleNavItems(role, isSuperAdmin, features, !!activeMembership);
   const mainItems = visibleItems.filter((i) => i.section === 'main');
   const manageItems = visibleItems.filter((i) => i.section === 'manage');
   const adminItems = visibleItems.filter((i) => i.section === 'admin');

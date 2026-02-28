@@ -179,9 +179,13 @@ export const navItems: NavItem[] = [
 export function getVisibleNavItems(
   role: string | null,
   isSuperAdmin: boolean,
-  features: Record<string, boolean>
+  features: Record<string, boolean>,
+  hasActiveMembership = true
 ): NavItem[] {
   return navItems.filter((item) => {
+    // No community = no menu items except profile (handled separately)
+    if (!hasActiveMembership && !isSuperAdmin) return false;
+
     // Super admin only items
     if (item.superAdminOnly && !isSuperAdmin) return false;
 
@@ -192,7 +196,6 @@ export function getVisibleNavItems(
 
     // Feature flag check
     if (item.feature) {
-      // If features object is empty (no settings), show all by default
       if (Object.keys(features).length > 0 && features[item.feature] === false) {
         return false;
       }
@@ -209,9 +212,10 @@ export function getVisibleNavItems(
 export function getBottomBarItems(
   role: string | null,
   isSuperAdmin: boolean,
-  features: Record<string, boolean>
+  features: Record<string, boolean>,
+  hasActiveMembership = true
 ): NavItem[] {
-  return getVisibleNavItems(role, isSuperAdmin, features).filter(
+  return getVisibleNavItems(role, isSuperAdmin, features, hasActiveMembership).filter(
     (item) => item.showInBottomBar
   );
 }

@@ -15,14 +15,19 @@ interface Invite {
   expires_at: string;
   created_at: string;
   accepted_at: string | null;
-  unit?: { unit_number: string; floor: string | null } | null;
+  unit?: { unit_number: string; attributes: Record<string, any> } | null;
 }
 
 interface Unit {
   id: string;
   unit_number: string;
-  floor: string | null;
-  unit_type: string | null;
+  attributes: Record<string, any>;
+  unit_type: {
+    id: string;
+    name: string;
+    category: string;
+    icon: string | null;
+  } | null;
 }
 
 const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }> = {
@@ -59,7 +64,7 @@ export default function ManageInvitesPage() {
     if (!communityId) return;
     const { data } = await supabase
       .from('invites')
-      .select('*, unit:units(unit_number, floor)')
+      .select('*, unit:units(unit_number, attributes)')
       .eq('community_id', communityId)
       .order('created_at', { ascending: false });
     if (data) setInvites(data);
@@ -70,11 +75,17 @@ export default function ManageInvitesPage() {
     if (!communityId) return;
     const { data } = await supabase
       .from('units')
-      .select('id, unit_number, floor, unit_type')
+      .select('id, unit_number, attributes, unit_type:community_unit_types(id, name, category, icon)')
       .eq('community_id', communityId)
       .eq('is_active', true)
       .order('unit_number');
-    if (data) setUnits(data);
+    if (data) {
+      const parsed = data.map((u: any) => ({
+        ...u,
+        unit_type: Array.isArray(u.unit_type) ? u.unit_type[0] || null : u.unit_type,
+      }));
+      setUnits(parsed.filter((u: any) => u.unit_type?.category === 'residential'));
+    }
   }, [communityId]);
 
   useEffect(() => {
@@ -428,9 +439,8 @@ export default function ManageInvitesPage() {
                       <option value="">No unit assigned</option>
                       {units.map((unit) => (
                         <option key={unit.id} value={unit.id}>
-                          {unit.unit_number}
-                          {unit.floor ? ` (${unit.floor} floor)` : ''}
-                          {unit.unit_type ? ` · ${unit.unit_type.replace(/_/g, ' ')}` : ''}
+                          {unit.unit_type?.icon || ''} {unit.unit_number}
+                          {unit.unit_type ? ` · ${unit.unit_type.name}` : ''}
                         </option>
                       ))}
                     </select>

@@ -281,17 +281,17 @@ export default function ProfilePage() {
                   {cs.residencies.length > 0 ? (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginLeft: 40 }}>
                       {cs.residencies.map((r: any) => {
-                        const typeIcon = r.unit?.unit_type === 'parking' ? '🅿️' :
-                          r.unit?.unit_type === 'storage' ? '📦' : '🏠';
+                        const icon = r.unit?.unit_type?.icon || '🏠';
+                        const typeName = r.unit?.unit_type?.name || '';
                         return (
                           <span key={r.id} style={{
                             fontSize: 11, padding: '3px 10px', borderRadius: 'var(--radius-full)',
                             background: 'var(--surface-alt)', border: '1px solid var(--border)',
                             color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 3,
                           }}>
-                            {typeIcon} {r.unit?.unit_number}
+                            {icon} {r.unit?.unit_number}
                             <span style={{ color: 'var(--text-faint)', fontSize: 9 }}>
-                              · {r.resident_type?.replace(/_/g, ' ')}
+                              · {typeName || r.resident_type?.replace(/_/g, ' ')}
                             </span>
                           </span>
                         );

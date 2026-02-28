@@ -3,6 +3,30 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../../../lib/auth-context';
 import { createClient } from '../../../../lib/supabase-browser';
+import ManageUnitTypes from './_components/ManageUnitTypes';
+
+// ============================================================
+// TYPES
+// ============================================================
+
+interface AttributeField {
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'boolean' | 'select';
+  options?: string[];
+}
+
+interface CommunityUnitType {
+  id: string;
+  community_id: string;
+  name: string;
+  category: 'residential' | 'secondary';
+  icon: string | null;
+  unit_number_label: string;
+  attribute_schema: AttributeField[];
+  sort_order: number;
+  is_active: boolean;
+}
 
 interface Residency {
   id: string;
@@ -17,41 +41,167 @@ interface Residency {
 interface Unit {
   id: string;
   unit_number: string;
-  floor: string | null;
-  unit_type: string | null;
-  bedrooms: number | null;
+  unit_type_id: string | null;
+  attributes: Record<string, any>;
   notes: string | null;
   is_active: boolean;
   created_at: string;
+  unit_type: CommunityUnitType | null;
   residencies: Residency[];
 }
 
-const UNIT_TYPES = [
-  { value: '', label: 'Not specified' },
-  { value: 'studio', label: 'Studio' },
-  { value: 'one_bed', label: '1 Bed' },
-  { value: 'two_bed', label: '2 Bed' },
-  { value: 'three_bed', label: '3 Bed' },
-  { value: 'four_bed_plus', label: '4+ Bed' },
-  { value: 'penthouse', label: 'Penthouse' },
-  { value: 'commercial', label: 'Commercial' },
-  { value: 'parking', label: 'Parking' },
-  { value: 'storage', label: 'Storage' },
-  { value: 'other', label: 'Other' },
-];
+// ============================================================
+// DYNAMIC ATTRIBUTE FORM
+// ============================================================
 
-const TYPE_COLORS: Record<string, string> = {
-  studio: '#06B6D4',
-  one_bed: '#10B981',
-  two_bed: '#3B82F6',
-  three_bed: '#8B5CF6',
-  four_bed_plus: '#EC4899',
-  penthouse: '#F59E0B',
-  commercial: '#F97316',
-  parking: '#64748B',
-  storage: '#64748B',
-  other: '#64748B',
-};
+function AttributeFormFields({
+  schema,
+  values,
+  onChange,
+}: {
+  schema: AttributeField[];
+  values: Record<string, any>;
+  onChange: (key: string, value: any) => void;
+}) {
+  if (!schema || schema.length === 0) return null;
+
+  return (
+    <div>
+      <div style={{
+        fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600,
+        color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: 0.8,
+        marginBottom: 10,
+      }}>
+        Details
+      </div>
+      <div style={{
+        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12,
+      }}>
+        {schema.map((field) => (
+          <div key={field.key}>
+            <label style={{
+              fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600,
+              color: 'var(--text-secondary)', display: 'block', marginBottom: 7,
+            }}>
+              {field.label}
+            </label>
+
+            {field.type === 'text' && (
+              <input
+                type="text"
+                value={values[field.key] || ''}
+                onChange={(e) => onChange(field.key, e.target.value || null)}
+                placeholder={field.label}
+              />
+            )}
+
+            {field.type === 'number' && (
+              <input
+                type="number"
+                value={values[field.key] ?? ''}
+                onChange={(e) => onChange(field.key, e.target.value ? Number(e.target.value) : null)}
+                placeholder="0"
+                min="0"
+              />
+            )}
+
+            {field.type === 'boolean' && (
+              <button
+                type="button"
+                onClick={() => onChange(field.key, !values[field.key])}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '9px 14px', width: '100%',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border)',
+                  background: values[field.key]
+                    ? 'color-mix(in srgb, var(--primary) 10%, transparent)'
+                    : 'var(--surface-alt)',
+                  cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 12,
+                  color: values[field.key] ? 'var(--primary)' : 'var(--text-muted)',
+                }}
+              >
+                <div style={{
+                  width: 32, height: 18, borderRadius: 9,
+                  background: values[field.key] ? 'var(--primary)' : 'var(--border)',
+                  position: 'relative', flexShrink: 0,
+                  transition: 'background 0.2s ease',
+                }}>
+                  <div style={{
+                    width: 14, height: 14, borderRadius: '50%', background: 'white',
+                    position: 'absolute', top: 2,
+                    left: values[field.key] ? 16 : 2,
+                    transition: 'left 0.2s ease',
+                  }} />
+                </div>
+                {values[field.key] ? 'Yes' : 'No'}
+              </button>
+            )}
+
+            {field.type === 'select' && (
+              <select
+                value={values[field.key] || ''}
+                onChange={(e) => onChange(field.key, e.target.value || null)}
+                style={{
+                  appearance: 'none',
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2364748B' stroke-width='1.5' fill='none'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 14px center',
+                  paddingRight: 36,
+                }}
+              >
+                <option value="">Not specified</option>
+                {field.options?.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// ATTRIBUTE DISPLAY (read-only on unit cards)
+// ============================================================
+
+function AttributeDisplay({ schema, values }: { schema: AttributeField[]; values: Record<string, any> }) {
+  const displayAttrs = schema.filter((f) => {
+    const val = values[f.key];
+    return val !== null && val !== undefined && val !== '' && val !== false;
+  });
+
+  if (displayAttrs.length === 0) return null;
+
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      {displayAttrs.map((f) => {
+        const val = values[f.key];
+        let display = '';
+        if (f.type === 'boolean') display = f.label;
+        else if (f.key === 'bedrooms') display = `${val} bed`;
+        else if (f.key === 'bathrooms') display = `${val} bath`;
+        else display = `${f.label}: ${val}`;
+
+        return (
+          <span key={f.key} style={{
+            fontSize: 10, padding: '2px 7px', borderRadius: 'var(--radius-sm)',
+            background: 'var(--surface-alt)', border: '1px solid var(--border)',
+            color: 'var(--text-faint)', fontFamily: 'var(--font-body)',
+          }}>
+            {display}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+// ============================================================
+// MAIN PAGE
+// ============================================================
 
 export default function ManageUnitsPage() {
   const { activeMembership, isAdmin } = useAuth();
@@ -59,46 +209,63 @@ export default function ManageUnitsPage() {
   const communityId = activeMembership?.community_id;
 
   const [units, setUnits] = useState<Unit[]>([]);
+  const [unitTypes, setUnitTypes] = useState<CommunityUnitType[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
   const [expandedUnit, setExpandedUnit] = useState<string | null>(null);
+  const [showUnitTypes, setShowUnitTypes] = useState(false);
 
   // Form state
   const [formUnitNumber, setFormUnitNumber] = useState('');
-  const [formFloor, setFormFloor] = useState('');
-  const [formUnitType, setFormUnitType] = useState('');
-  const [formBedrooms, setFormBedrooms] = useState('');
+  const [formUnitTypeId, setFormUnitTypeId] = useState('');
+  const [formAttributes, setFormAttributes] = useState<Record<string, any>>({});
   const [formNotes, setFormNotes] = useState('');
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
 
   // Filter
-  const [filterFloor, setFilterFloor] = useState('all');
+  const [filterTypeId, setFilterTypeId] = useState('all');
   const [filterOccupancy, setFilterOccupancy] = useState<'all' | 'occupied' | 'vacant'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const fetchUnits = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     if (!communityId) return;
-    const { data } = await supabase
+
+    // Fetch community unit types
+    const { data: typeData } = await supabase
+      .from('community_unit_types')
+      .select('*')
+      .eq('community_id', communityId)
+      .eq('is_active', true)
+      .order('sort_order');
+
+    if (typeData) setUnitTypes(typeData);
+
+    // Fetch units with type and residencies
+    const { data: unitData } = await supabase
       .from('units')
-      .select('*, residencies(id, user_id, resident_type, starts_at, ends_at, is_current, user:users(full_name, email))')
+      .select('*, unit_type:community_unit_types(id, name, category, icon, unit_number_label, attribute_schema, sort_order, is_active), residencies(id, user_id, resident_type, starts_at, ends_at, is_current, user:users(full_name, email))')
       .eq('community_id', communityId)
       .order('unit_number');
-    if (data) setUnits(data);
+
+    if (unitData) setUnits(unitData);
     setLoading(false);
   }, [communityId]);
 
   useEffect(() => {
-    fetchUnits();
-  }, [fetchUnits]);
+    fetchData();
+  }, [fetchData]);
+
+  // Get the selected unit type for the form
+  const selectedFormType = unitTypes.find((t) => t.id === formUnitTypeId);
+  const unitNumberLabel = selectedFormType?.unit_number_label || 'Unit Number';
 
   const openCreateForm = () => {
     setEditingUnit(null);
     setFormUnitNumber('');
-    setFormFloor('');
-    setFormUnitType('');
-    setFormBedrooms('');
+    setFormUnitTypeId(unitTypes[0]?.id || '');
+    setFormAttributes({});
     setFormNotes('');
     setFormError('');
     setShowForm(true);
@@ -107,9 +274,8 @@ export default function ManageUnitsPage() {
   const openEditForm = (unit: Unit) => {
     setEditingUnit(unit);
     setFormUnitNumber(unit.unit_number);
-    setFormFloor(unit.floor || '');
-    setFormUnitType(unit.unit_type || '');
-    setFormBedrooms(unit.bedrooms?.toString() || '');
+    setFormUnitTypeId(unit.unit_type_id || '');
+    setFormAttributes(unit.attributes || {});
     setFormNotes(unit.notes || '');
     setFormError('');
     setShowForm(true);
@@ -121,17 +287,36 @@ export default function ManageUnitsPage() {
     setFormError('');
   };
 
+  const handleAttributeChange = (key: string, value: any) => {
+    setFormAttributes((prev) => {
+      const next = { ...prev };
+      if (value === null || value === undefined || value === '') {
+        delete next[key];
+      } else {
+        next[key] = value;
+      }
+      return next;
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormSubmitting(true);
     setFormError('');
 
+    // Clean attributes: remove nulls
+    const cleanAttrs: Record<string, any> = {};
+    for (const [k, v] of Object.entries(formAttributes)) {
+      if (v !== null && v !== undefined && v !== '') {
+        cleanAttrs[k] = v;
+      }
+    }
+
     const payload = {
       community_id: communityId,
       unit_number: formUnitNumber.trim(),
-      floor: formFloor.trim() || null,
-      unit_type: formUnitType || null,
-      bedrooms: formBedrooms ? parseInt(formBedrooms) : null,
+      unit_type_id: formUnitTypeId || null,
+      attributes: cleanAttrs,
       notes: formNotes.trim() || null,
     };
 
@@ -164,7 +349,7 @@ export default function ManageUnitsPage() {
 
     setFormSubmitting(false);
     resetForm();
-    fetchUnits();
+    fetchData();
   };
 
   const handleToggleActive = async (unit: Unit) => {
@@ -172,27 +357,24 @@ export default function ManageUnitsPage() {
       .from('units')
       .update({ is_active: !unit.is_active })
       .eq('id', unit.id);
-    fetchUnits();
+    fetchData();
   };
 
   // Derived data
-  const floors = [...new Set(units.map((u) => u.floor).filter(Boolean))] as string[];
-  floors.sort();
-
   const getCurrentResidents = (unit: Unit) =>
     unit.residencies?.filter((r) => r.is_current) || [];
 
   const isOccupied = (unit: Unit) => getCurrentResidents(unit).length > 0;
 
   const filteredUnits = units.filter((u) => {
-    if (filterFloor !== 'all' && u.floor !== filterFloor) return false;
+    if (filterTypeId !== 'all' && u.unit_type_id !== filterTypeId) return false;
     if (filterOccupancy === 'occupied' && !isOccupied(u)) return false;
     if (filterOccupancy === 'vacant' && isOccupied(u)) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       if (
         !u.unit_number.toLowerCase().includes(q) &&
-        !u.floor?.toLowerCase().includes(q) &&
+        !(u.unit_type?.name || '').toLowerCase().includes(q) &&
         !getCurrentResidents(u).some((r) =>
           r.user?.full_name?.toLowerCase().includes(q) ||
           r.user?.email?.toLowerCase().includes(q)
@@ -228,31 +410,45 @@ export default function ManageUnitsPage() {
       }}>
         <div>
           <h1 style={{
-            fontFamily: 'var(--font-heading)',
-            fontSize: 'clamp(22px, 4vw, 28px)',
+            fontFamily: 'var(--font-heading)', fontSize: 'clamp(22px, 4vw, 28px)',
             color: 'var(--text)', marginBottom: 6,
           }}>
             Manage Units
           </h1>
-          <p style={{
-            fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text-muted)',
-          }}>
+          <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text-muted)' }}>
             {activeMembership?.community?.name} · {stats.total} units
           </p>
         </div>
-        <button
-          onClick={openCreateForm}
-          className="btn-primary"
-          style={{ width: 'auto', padding: '10px 22px', fontSize: 13 }}
-        >
-          + Add Unit
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setShowUnitTypes(true)}
+            style={{
+              width: 'auto', padding: '10px 18px', fontSize: 13,
+              borderRadius: 'var(--radius-md)', border: '1px solid var(--border)',
+              background: 'transparent', color: 'var(--text-secondary)',
+              fontFamily: 'var(--font-body)', fontWeight: 600, cursor: 'pointer',
+            }}>
+            Unit Types
+          </button>
+          <button onClick={openCreateForm} className="btn-primary"
+            style={{ width: 'auto', padding: '10px 22px', fontSize: 13 }}>
+            + Add Unit
+          </button>
+        </div>
       </div>
+
+      {/* Unit Types Management Panel */}
+      {communityId && (
+        <ManageUnitTypes
+          communityId={communityId}
+          open={showUnitTypes}
+          onClose={() => setShowUnitTypes(false)}
+          onUpdated={fetchData}
+        />
+      )}
 
       {/* Stats */}
       <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
         gap: 12, marginBottom: 24,
       }}>
         {[
@@ -267,38 +463,30 @@ export default function ManageUnitsPage() {
           }}>
             <div style={{
               fontFamily: 'var(--font-body)', fontSize: 10, fontWeight: 600,
-              color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: 0.8,
-              marginBottom: 4,
+              color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4,
             }}>{s.label}</div>
             <div style={{
-              fontFamily: 'var(--font-heading)', fontSize: 22, fontWeight: 700,
-              color: s.color,
+              fontFamily: 'var(--font-heading)', fontSize: 22, fontWeight: 700, color: s.color,
             }}>{s.value}</div>
           </div>
         ))}
       </div>
 
       {/* Filters */}
-      <div style={{
-        display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center',
-      }}>
-        {/* Search */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search units or residents..."
-          style={{
-            width: 220, padding: '8px 12px', fontSize: 12,
-            borderRadius: 'var(--radius-full)',
-          }}
+          style={{ width: 220, padding: '8px 12px', fontSize: 12, borderRadius: 'var(--radius-full)' }}
         />
 
-        {/* Floor filter */}
-        {floors.length > 1 && (
+        {/* Unit type filter */}
+        {unitTypes.length > 1 && (
           <select
-            value={filterFloor}
-            onChange={(e) => setFilterFloor(e.target.value)}
+            value={filterTypeId}
+            onChange={(e) => setFilterTypeId(e.target.value)}
             style={{
               width: 'auto', padding: '8px 32px 8px 12px', fontSize: 12,
               borderRadius: 'var(--radius-full)',
@@ -308,9 +496,9 @@ export default function ManageUnitsPage() {
               backgroundPosition: 'right 12px center',
             }}
           >
-            <option value="all">All floors</option>
-            {floors.map((f) => (
-              <option key={f} value={f}>{f} floor</option>
+            <option value="all">All types</option>
+            {unitTypes.map((t) => (
+              <option key={t.id} value={t.id}>{t.icon || ''} {t.name}</option>
             ))}
           </select>
         )}
@@ -326,8 +514,7 @@ export default function ManageUnitsPage() {
                 border: filterOccupancy === f ? '1px solid var(--primary)' : '1px solid var(--border)',
                 background: filterOccupancy === f ? 'var(--primary-glow)' : 'transparent',
                 color: filterOccupancy === f ? 'var(--primary)' : 'var(--text-muted)',
-                fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600,
-                cursor: 'pointer',
+                fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600, cursor: 'pointer',
               }}
             >
               {f.charAt(0).toUpperCase() + f.slice(1)}
@@ -345,14 +532,15 @@ export default function ManageUnitsPage() {
           }} />
           <div style={{
             position: 'fixed', top: '50%', left: '50%',
-            transform: 'translate(-50%, -50%)', width: '100%', maxWidth: 440,
+            transform: 'translate(-50%, -50%)', width: '100%', maxWidth: 480,
             background: 'var(--surface)', border: '1px solid var(--border)',
             borderRadius: 'var(--radius-lg)', boxShadow: 'var(--card-shadow)',
-            zIndex: 61, overflow: 'hidden',
+            zIndex: 61, overflow: 'hidden', maxHeight: '90vh', overflowY: 'auto',
           }}>
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               padding: '18px 24px', borderBottom: '1px solid var(--border)',
+              position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 1,
             }}>
               <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: 17, color: 'var(--text)' }}>
                 {editingUnit ? 'Edit Unit' : 'Add New Unit'}
@@ -376,76 +564,81 @@ export default function ManageUnitsPage() {
                   }}>{formError}</div>
                 )}
 
-                {/* Unit number + Floor row */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div>
-                    <label style={{
-                      fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600,
-                      color: 'var(--text-secondary)', display: 'block', marginBottom: 7,
-                    }}>
-                      Unit Number <span style={{ color: 'var(--error)' }}>*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formUnitNumber}
-                      onChange={(e) => setFormUnitNumber(e.target.value)}
-                      placeholder="e.g. Flat 4B"
-                      required
-                      autoFocus
-                    />
-                  </div>
-                  <div>
-                    <label style={{
-                      fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600,
-                      color: 'var(--text-secondary)', display: 'block', marginBottom: 7,
-                    }}>Floor</label>
-                    <input
-                      type="text"
-                      value={formFloor}
-                      onChange={(e) => setFormFloor(e.target.value)}
-                      placeholder="e.g. 2nd"
-                    />
+                {/* Unit Type selector */}
+                <div>
+                  <label style={{
+                    fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600,
+                    color: 'var(--text-secondary)', display: 'block', marginBottom: 7,
+                  }}>
+                    Unit Type <span style={{ color: 'var(--error)' }}>*</span>
+                  </label>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {unitTypes.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => {
+                          setFormUnitTypeId(t.id);
+                          // Reset attributes when type changes (keep common ones)
+                          if (!editingUnit) setFormAttributes({});
+                        }}
+                        style={{
+                          padding: '8px 14px', borderRadius: 'var(--radius-md)',
+                          border: formUnitTypeId === t.id
+                            ? '2px solid var(--primary)' : '1px solid var(--border)',
+                          background: formUnitTypeId === t.id
+                            ? 'var(--primary-glow)' : 'var(--surface-alt)',
+                          cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                        }}
+                      >
+                        {t.icon && <span style={{ fontSize: 14 }}>{t.icon}</span>}
+                        <span style={{
+                          fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600,
+                          color: formUnitTypeId === t.id ? 'var(--primary)' : 'var(--text)',
+                        }}>
+                          {t.name}
+                        </span>
+                        <span style={{
+                          fontSize: 9, padding: '1px 5px', borderRadius: 'var(--radius-full)',
+                          background: t.category === 'residential'
+                            ? 'color-mix(in srgb, var(--primary) 15%, transparent)'
+                            : 'color-mix(in srgb, var(--accent) 15%, transparent)',
+                          color: t.category === 'residential' ? 'var(--primary)' : 'var(--accent)',
+                          fontWeight: 600,
+                        }}>
+                          {t.category === 'residential' ? 'Primary' : 'Secondary'}
+                        </span>
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                {/* Type + Bedrooms row */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div>
-                    <label style={{
-                      fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600,
-                      color: 'var(--text-secondary)', display: 'block', marginBottom: 7,
-                    }}>Type</label>
-                    <select
-                      value={formUnitType}
-                      onChange={(e) => setFormUnitType(e.target.value)}
-                      style={{
-                        appearance: 'none',
-                        backgroundImage: `url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2364748B' stroke-width='1.5' fill='none'/%3E%3C/svg%3E")`,
-                        backgroundRepeat: 'no-repeat',
-                        backgroundPosition: 'right 14px center',
-                        paddingRight: 36,
-                      }}
-                    >
-                      {UNIT_TYPES.map((t) => (
-                        <option key={t.value} value={t.value}>{t.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{
-                      fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600,
-                      color: 'var(--text-secondary)', display: 'block', marginBottom: 7,
-                    }}>Bedrooms</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="10"
-                      value={formBedrooms}
-                      onChange={(e) => setFormBedrooms(e.target.value)}
-                      placeholder="0"
-                    />
-                  </div>
+                {/* Unit number */}
+                <div>
+                  <label style={{
+                    fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600,
+                    color: 'var(--text-secondary)', display: 'block', marginBottom: 7,
+                  }}>
+                    {unitNumberLabel} <span style={{ color: 'var(--error)' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formUnitNumber}
+                    onChange={(e) => setFormUnitNumber(e.target.value)}
+                    placeholder={`e.g. ${selectedFormType?.category === 'secondary' ? 'Bay 42' : 'Flat 4B'}`}
+                    required
+                    autoFocus
+                  />
                 </div>
+
+                {/* Dynamic attribute fields */}
+                {selectedFormType && selectedFormType.attribute_schema.length > 0 && (
+                  <AttributeFormFields
+                    schema={selectedFormType.attribute_schema}
+                    values={formAttributes}
+                    onChange={handleAttributeChange}
+                  />
+                )}
 
                 {/* Notes */}
                 <div>
@@ -506,7 +699,8 @@ export default function ManageUnitsPage() {
             {units.length === 0 ? 'No units yet. Add your first unit to get started!' : 'No units match your filters.'}
           </p>
           {units.length === 0 && (
-            <button onClick={openCreateForm} className="btn-primary" style={{ width: 'auto', padding: '10px 22px', fontSize: 13 }}>
+            <button onClick={openCreateForm} className="btn-primary"
+              style={{ width: 'auto', padding: '10px 22px', fontSize: 13 }}>
               + Add Unit
             </button>
           )}
@@ -517,55 +711,49 @@ export default function ManageUnitsPage() {
             const residents = getCurrentResidents(unit);
             const occupied = residents.length > 0;
             const expanded = expandedUnit === unit.id;
-            const typeColor = TYPE_COLORS[unit.unit_type || ''] || 'var(--text-faint)';
             const pastResidents = unit.residencies?.filter((r) => !r.is_current) || [];
+            const typeInfo = unit.unit_type;
 
             return (
               <div key={unit.id} style={{
                 background: 'var(--surface)',
                 border: `1px solid ${!unit.is_active ? 'color-mix(in srgb, var(--error) 30%, var(--border))' : 'var(--border)'}`,
-                borderRadius: 'var(--radius-md)',
-                overflow: 'hidden',
+                borderRadius: 'var(--radius-md)', overflow: 'hidden',
                 opacity: unit.is_active ? 1 : 0.6,
               }}>
                 {/* Main row */}
                 <div
                   style={{
                     display: 'flex', alignItems: 'center', gap: 14,
-                    padding: '14px 18px', cursor: 'pointer',
-                    flexWrap: 'wrap',
+                    padding: '14px 18px', cursor: 'pointer', flexWrap: 'wrap',
                   }}
                   onClick={() => setExpandedUnit(expanded ? null : unit.id)}
                 >
-                  {/* Unit number + floor */}
+                  {/* Unit number */}
                   <div style={{ minWidth: 120, flex: '0 0 auto' }}>
                     <div style={{
                       fontFamily: 'var(--font-heading)', fontSize: 15, fontWeight: 700,
-                      color: 'var(--text)',
+                      color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6,
                     }}>
+                      {typeInfo?.icon && <span>{typeInfo.icon}</span>}
                       {unit.unit_number}
                     </div>
-                    {unit.floor && (
+                    {typeInfo && (
                       <div style={{
                         fontFamily: 'var(--font-body)', fontSize: 11,
                         color: 'var(--text-faint)', marginTop: 1,
                       }}>
-                        {unit.floor} floor
+                        {typeInfo.name}
                       </div>
                     )}
                   </div>
 
-                  {/* Type badge */}
-                  {unit.unit_type && (
-                    <span style={{
-                      fontSize: 10, fontWeight: 700, padding: '3px 10px',
-                      borderRadius: 'var(--radius-full)',
-                      background: `color-mix(in srgb, ${typeColor} 15%, transparent)`,
-                      color: typeColor, letterSpacing: 0.3,
-                    }}>
-                      {UNIT_TYPES.find((t) => t.value === unit.unit_type)?.label || unit.unit_type}
-                      {unit.bedrooms != null ? ` · ${unit.bedrooms} bed` : ''}
-                    </span>
+                  {/* Attributes summary */}
+                  {typeInfo && (
+                    <AttributeDisplay
+                      schema={typeInfo.attribute_schema || []}
+                      values={unit.attributes || {}}
+                    />
                   )}
 
                   {/* Residents preview */}
@@ -578,9 +766,7 @@ export default function ManageUnitsPage() {
                             color: 'var(--text-secondary)',
                           }}>
                             {r.user?.full_name || r.user?.email}
-                            <span style={{
-                              fontSize: 10, color: 'var(--text-faint)', marginLeft: 4,
-                            }}>
+                            <span style={{ fontSize: 10, color: 'var(--text-faint)', marginLeft: 4 }}>
                               ({r.resident_type.replace(/_/g, ' ')})
                             </span>
                           </span>
@@ -590,39 +776,33 @@ export default function ManageUnitsPage() {
                       <span style={{
                         fontFamily: 'var(--font-body)', fontSize: 12,
                         color: 'var(--warning)', fontStyle: 'italic',
-                      }}>
-                        Vacant
-                      </span>
+                      }}>Vacant</span>
                     )}
                   </div>
 
-                  {/* Occupancy indicator */}
+                  {/* Occupancy dot */}
                   <div style={{
                     width: 8, height: 8, borderRadius: '50%',
                     background: !unit.is_active ? 'var(--error)' : occupied ? 'var(--primary)' : 'var(--warning)',
                     flexShrink: 0,
                   }} />
 
-                  {/* Expand chevron */}
+                  {/* Expand */}
                   <span style={{
                     fontSize: 10, color: 'var(--text-faint)',
                     transform: expanded ? 'rotate(180deg)' : 'none',
-                    transition: 'transform 0.2s ease',
-                    flexShrink: 0,
+                    transition: 'transform 0.2s ease', flexShrink: 0,
                   }}>▼</span>
                 </div>
 
                 {/* Expanded detail */}
                 {expanded && (
                   <div style={{
-                    borderTop: '1px solid var(--border)',
-                    padding: '16px 18px',
+                    borderTop: '1px solid var(--border)', padding: '16px 18px',
                     background: 'var(--surface-alt)',
                   }}>
-                    {/* Actions row */}
-                    <div style={{
-                      display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap',
-                    }}>
+                    {/* Actions */}
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
                       <button
                         onClick={(e) => { e.stopPropagation(); openEditForm(unit); }}
                         style={{
@@ -631,9 +811,7 @@ export default function ManageUnitsPage() {
                           color: 'var(--text-secondary)', fontFamily: 'var(--font-body)',
                           fontSize: 11, fontWeight: 600, cursor: 'pointer',
                         }}
-                      >
-                        Edit
-                      </button>
+                      >Edit</button>
                       <button
                         onClick={(e) => { e.stopPropagation(); handleToggleActive(unit); }}
                         style={{
@@ -641,44 +819,54 @@ export default function ManageUnitsPage() {
                           border: `1px solid ${unit.is_active ? 'color-mix(in srgb, var(--error) 30%, transparent)' : 'color-mix(in srgb, var(--primary) 30%, transparent)'}`,
                           background: 'transparent',
                           color: unit.is_active ? 'var(--error)' : 'var(--primary)',
-                          fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600,
-                          cursor: 'pointer',
+                          fontFamily: 'var(--font-body)', fontSize: 11, fontWeight: 600, cursor: 'pointer',
                         }}
-                      >
-                        {unit.is_active ? 'Deactivate' : 'Reactivate'}
-                      </button>
+                      >{unit.is_active ? 'Deactivate' : 'Reactivate'}</button>
                     </div>
 
-                    {/* Unit details */}
-                    <div style={{
-                      display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-                      gap: 10, marginBottom: 16,
-                    }}>
-                      {[
-                        { label: 'Type', value: UNIT_TYPES.find((t) => t.value === unit.unit_type)?.label || '—' },
-                        { label: 'Floor', value: unit.floor || '—' },
-                        { label: 'Bedrooms', value: unit.bedrooms != null ? unit.bedrooms.toString() : '—' },
-                        { label: 'Status', value: unit.is_active ? 'Active' : 'Inactive' },
-                      ].map((d) => (
-                        <div key={d.label}>
+                    {/* Unit details from attributes */}
+                    {typeInfo && typeInfo.attribute_schema.length > 0 && (
+                      <div style={{
+                        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+                        gap: 10, marginBottom: 16,
+                      }}>
+                        {typeInfo.attribute_schema.map((field: AttributeField) => {
+                          const val = unit.attributes?.[field.key];
+                          let display = '—';
+                          if (val !== null && val !== undefined && val !== '') {
+                            if (field.type === 'boolean') display = val ? 'Yes' : 'No';
+                            else display = String(val);
+                          }
+                          return (
+                            <div key={field.key}>
+                              <div style={{
+                                fontFamily: 'var(--font-body)', fontSize: 10, fontWeight: 600,
+                                color: 'var(--text-faint)', textTransform: 'uppercase',
+                                letterSpacing: 0.8, marginBottom: 3,
+                              }}>{field.label}</div>
+                              <div style={{
+                                fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text)',
+                              }}>{display}</div>
+                            </div>
+                          );
+                        })}
+                        <div>
                           <div style={{
                             fontFamily: 'var(--font-body)', fontSize: 10, fontWeight: 600,
-                            color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: 0.8,
-                            marginBottom: 3,
-                          }}>{d.label}</div>
+                            color: 'var(--text-faint)', textTransform: 'uppercase',
+                            letterSpacing: 0.8, marginBottom: 3,
+                          }}>Status</div>
                           <div style={{
-                            fontFamily: 'var(--font-body)', fontSize: 13,
-                            color: 'var(--text)',
-                          }}>{d.value}</div>
+                            fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text)',
+                          }}>{unit.is_active ? 'Active' : 'Inactive'}</div>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    )}
 
                     {unit.notes && (
                       <div style={{
                         background: 'var(--surface)', borderRadius: 'var(--radius-sm)',
-                        padding: '10px 12px', marginBottom: 16,
-                        border: '1px solid var(--border)',
+                        padding: '10px 12px', marginBottom: 16, border: '1px solid var(--border)',
                       }}>
                         <div style={{
                           fontFamily: 'var(--font-body)', fontSize: 10, fontWeight: 600,
@@ -698,9 +886,7 @@ export default function ManageUnitsPage() {
                         fontFamily: 'var(--font-body)', fontSize: 10, fontWeight: 600,
                         color: 'var(--text-faint)', textTransform: 'uppercase',
                         letterSpacing: 0.8, marginBottom: 8,
-                      }}>
-                        Current Residents ({residents.length})
-                      </div>
+                      }}>Current Residents ({residents.length})</div>
                       {residents.length === 0 ? (
                         <p style={{
                           fontFamily: 'var(--font-body)', fontSize: 12,
@@ -731,17 +917,10 @@ export default function ManageUnitsPage() {
                                   background: r.resident_type === 'owner'
                                     ? 'color-mix(in srgb, var(--accent) 15%, transparent)'
                                     : 'var(--primary-glow)',
-                                  color: r.resident_type === 'owner'
-                                    ? 'var(--accent)' : 'var(--primary)',
-                                }}>
-                                  {r.resident_type.replace(/_/g, ' ')}
-                                </span>
-                                <div style={{
-                                  fontSize: 10, color: 'var(--text-faint)', marginTop: 3,
-                                }}>
-                                  Since {new Date(r.starts_at).toLocaleDateString('en-GB', {
-                                    month: 'short', year: 'numeric',
-                                  })}
+                                  color: r.resident_type === 'owner' ? 'var(--accent)' : 'var(--primary)',
+                                }}>{r.resident_type.replace(/_/g, ' ')}</span>
+                                <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 3 }}>
+                                  Since {new Date(r.starts_at).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
                                 </div>
                               </div>
                             </div>
@@ -757,9 +936,7 @@ export default function ManageUnitsPage() {
                           fontFamily: 'var(--font-body)', fontSize: 10, fontWeight: 600,
                           color: 'var(--text-faint)', textTransform: 'uppercase',
                           letterSpacing: 0.8, marginBottom: 8,
-                        }}>
-                          Past Residents ({pastResidents.length})
-                        </div>
+                        }}>Past Residents ({pastResidents.length})</div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                           {pastResidents.map((r) => (
                             <div key={r.id} style={{
@@ -769,19 +946,12 @@ export default function ManageUnitsPage() {
                               opacity: 0.6,
                             }}>
                               <div style={{
-                                fontFamily: 'var(--font-body)', fontSize: 12,
-                                color: 'var(--text-muted)',
-                              }}>
-                                {r.user?.full_name || 'Unknown'}
-                              </div>
-                              <div style={{
-                                fontSize: 10, color: 'var(--text-faint)',
-                              }}>
+                                fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--text-muted)',
+                              }}>{r.user?.full_name || 'Unknown'}</div>
+                              <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>
                                 {new Date(r.starts_at).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
                                 {' → '}
-                                {r.ends_at
-                                  ? new Date(r.ends_at).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
-                                  : '?'}
+                                {r.ends_at ? new Date(r.ends_at).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : '?'}
                               </div>
                             </div>
                           ))}

@@ -47,11 +47,17 @@ export interface Residency {
   unit: {
     id: string;
     unit_number: string;
-    floor: string | null;
-    unit_type: string | null;
     community_id: string;
+    attributes: Record<string, any>;
+    unit_type: {
+      id: string;
+      name: string;
+      category: 'residential' | 'secondary';
+      icon: string | null;
+    } | null;
   };
 }
+
 
 interface AuthContextType {
   user: User | null;
@@ -135,8 +141,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Fetch memberships with community details
     const { data: membershipData } = await supabase
       .from('user_communities')
-      .select('*, community:communities(id, name, slug, settings)')
-      .eq('user_id', user.id);
+      .select('*, community:communities(id, name, slug, settings, logo_url)')
+      .eq('user_id', user.id)
+      .eq('status', 'active');
 
     if (membershipData && membershipData.length > 0) {
       setMemberships(membershipData);
@@ -148,12 +155,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (preset) {
         useThemeStore.getState().setPreset(preset);
       }
+    } else {
+      // No active memberships — clear everything
+      setMemberships([]);
+      setActiveMembership(null);
+      useThemeStore.getState().setPreset(MASTER_THEME);
     }
 
     // Fetch current residencies
     const { data: residencyData } = await supabase
       .from('residencies')
-      .select('*, unit:units(id, unit_number, floor, unit_type, community_id)')
+      .select('*, unit:units(id, unit_number, community_id, attributes, unit_type:community_unit_types(id, name, category, icon))')
       .eq('user_id', user.id)
       .eq('is_current', true);
 
