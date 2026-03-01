@@ -140,10 +140,13 @@ export default function ManageInvitesPage() {
 
       if (existingMembership) {
         if (existingMembership.status === 'active') {
-          // Already an active member
-          setFormError(`${existingUser.full_name || trimmedEmail} is already an active member of this community.`);
-          setFormSubmitting(false);
-          return;
+          if (!formUnitId) {
+            // Already active and no unit to add — nothing to do
+            setFormError(`${existingUser.full_name || trimmedEmail} is already an active member of this community.`);
+            setFormSubmitting(false);
+            return;
+          }
+          // Already active — skip membership, just add the new unit below
         }
 
         // Inactive member — reactivate

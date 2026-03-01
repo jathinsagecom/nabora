@@ -181,6 +181,15 @@ function RegisterForm() {
               <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: 22, color: 'var(--text)', marginBottom: 10 }}>Invite required</h2>
               <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.7, marginBottom: 24 }}>Nabora is invite-only. Ask your building manager or community admin for an invite link to join your community.</p>
               <Link href="/auth/login" style={{ textDecoration: 'none' }}><button className="btn-secondary">Already have an account? Sign in</button></Link>
+              <p className="animate-fade-in" style={{
+                textAlign: 'center', fontFamily: 'var(--font-body)',
+                fontSize: 12, color: 'var(--text-faint)', marginTop: 12,
+                animationDelay: '0.3s', opacity: 0,
+              }}>
+                <Link href="/" style={{ fontWeight: 500, color: 'var(--text-faint)' }}>
+                  Learn more about Nabora →
+                </Link>
+              </p>
             </div>
           </div>
         </div>

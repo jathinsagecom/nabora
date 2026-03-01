@@ -302,6 +302,15 @@ export default function LoginPage() {
           New here?{' '}
           <Link href="/auth/register">Join your community</Link>
         </p>
+        <p className="animate-fade-in" style={{
+          textAlign: 'center', fontFamily: 'var(--font-body)',
+          fontSize: 12, color: 'var(--text-faint)', marginTop: 12,
+          animationDelay: '0.3s', opacity: 0,
+        }}>
+          <Link href="/" style={{ fontWeight: 500, color: 'var(--text-faint)' }}>
+            Learn more about Nabora →
+          </Link>
+        </p>
       </div>
     </div>
   );

@@ -223,6 +223,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Switch theme to match community
     const preset = membership.community?.settings?.theme?.preset as ThemePreset | undefined;
     useThemeStore.getState().setPreset(preset || MASTER_THEME);
+
+    // Navigate to dashboard on community switch
+    router.push('/dashboard');
   };
 
   const signOut = async () => {
