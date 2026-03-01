@@ -99,6 +99,25 @@ a:hover { opacity: 0.8; }
   .profile-layout { grid-template-columns: 1fr; }
 }
 
+/* Settings page layout */
+.settings-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 340px);
+  gap: 24px;
+  align-items: start;
+}
+
+.settings-address-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .settings-layout { grid-template-columns: 1fr; }
+  .settings-address-row { grid-template-columns: 1fr; }
+}
+
 /* Admin communities grid */
 .admin-community-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
 .admin-theme-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

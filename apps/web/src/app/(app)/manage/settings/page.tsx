@@ -144,12 +144,7 @@ export default function ManageSettingsPage() {
         </p>
       </div>
 
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 340px)',
-        gap: 24,
-        alignItems: 'start',
-      }}>
+      <div className="settings-layout">
         {/* Left column — Editable info */}
         <div>
           {/* Community details form */}
@@ -204,7 +199,7 @@ export default function ManageSettingsPage() {
                 </div>
 
                 {/* Address + Postcode row */}
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
+                <div className="settings-address-row">
                   <div>
                     <label style={{
                       fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600,

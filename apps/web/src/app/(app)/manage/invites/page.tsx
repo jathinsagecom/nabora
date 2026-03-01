@@ -30,6 +30,10 @@ interface Unit {
   } | null;
 }
 
+type FormSuccess =
+  | { type: 'invite'; token: string; email: string }
+  | { type: 'added'; name: string; email: string; unitNumber: string | null };
+
 const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }> = {
   pending: { bg: 'var(--warning)', color: '#000', label: 'Pending' },
   accepted: { bg: 'var(--success)', color: '#fff', label: 'Accepted' },
@@ -55,7 +59,7 @@ export default function ManageInvitesPage() {
   const [formResidentType, setFormResidentType] = useState<string>('tenant');
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
-  const [formSuccess, setFormSuccess] = useState<{ token: string; email: string } | null>(null);
+  const [formSuccess, setFormSuccess] = useState<FormSuccess | null>(null);
 
   // Filter state
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -99,21 +103,112 @@ export default function ManageInvitesPage() {
     setFormError('');
     setFormSuccess(null);
 
+    const trimmedEmail = formEmail.trim().toLowerCase();
+
+    // Validate: unit is required for residents
+    if (formRole === 'resident' && !formUnitId) {
+      setFormError('Please select a unit for this resident.');
+      setFormSubmitting(false);
+      return;
+    }
+
     // Check for existing pending invite with same email
-    const existing = invites.find(
-      (i) => i.email === formEmail && i.status === 'pending'
+    const existingInvite = invites.find(
+      (i) => i.email.toLowerCase() === trimmedEmail && i.status === 'pending'
     );
-    if (existing) {
+    if (existingInvite) {
       setFormError('A pending invite already exists for this email address.');
       setFormSubmitting(false);
       return;
     }
 
+    // ── Check if this email belongs to an existing user ──
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id, full_name, email')
+      .eq('email', trimmedEmail)
+      .single();
+
+    if (existingUser) {
+      // User exists in the app — check their membership in THIS community
+      const { data: existingMembership } = await supabase
+        .from('user_communities')
+        .select('id, status')
+        .eq('user_id', existingUser.id)
+        .eq('community_id', communityId)
+        .maybeSingle();
+
+      if (existingMembership) {
+        if (existingMembership.status === 'active') {
+          // Already an active member
+          setFormError(`${existingUser.full_name || trimmedEmail} is already an active member of this community.`);
+          setFormSubmitting(false);
+          return;
+        }
+
+        // Inactive member — reactivate
+        const { error: reactivateError } = await supabase
+          .from('user_communities')
+          .update({ status: 'active', role: formRole })
+          .eq('id', existingMembership.id);
+
+        if (reactivateError) {
+          setFormError(reactivateError.message || 'Failed to reactivate member.');
+          setFormSubmitting(false);
+          return;
+        }
+      } else {
+        // User exists but not in this community — add them
+        const { error: insertError } = await supabase
+          .from('user_communities')
+          .insert({
+            user_id: existingUser.id,
+            community_id: communityId,
+            role: formRole,
+            is_default: false,
+          });
+
+        if (insertError) {
+          setFormError(insertError.message || 'Failed to add member.');
+          setFormSubmitting(false);
+          return;
+        }
+      }
+
+      // Create residency if unit was selected
+      if (formUnitId) {
+        const { error: residencyError } = await supabase
+          .from('residencies')
+          .insert({
+            unit_id: formUnitId,
+            user_id: existingUser.id,
+            resident_type: formResidentType || null,
+            starts_at: new Date().toISOString().split('T')[0],
+          });
+
+        if (residencyError) {
+          console.error('Residency creation error:', residencyError);
+          // Don't block — admin can assign unit later
+        }
+      }
+
+      const selectedUnit = units.find((u) => u.id === formUnitId);
+      setFormSuccess({
+        type: 'added',
+        name: existingUser.full_name || trimmedEmail,
+        email: trimmedEmail,
+        unitNumber: selectedUnit ? selectedUnit.unit_number : null,
+      });
+      setFormSubmitting(false);
+      return;
+    }
+
+    // ── New user — create a normal invite ──
     const { data, error } = await supabase
       .from('invites')
       .insert({
         community_id: communityId,
-        email: formEmail,
+        email: trimmedEmail,
         unit_id: formUnitId || null,
         role: formRole,
         resident_type: formUnitId ? formResidentType : null,
@@ -129,7 +224,7 @@ export default function ManageInvitesPage() {
       return;
     }
 
-    setFormSuccess({ token: data.token, email: data.email });
+    setFormSuccess({ type: 'invite', token: data.token, email: data.email });
     setFormSubmitting(false);
     fetchInvites();
   };
@@ -264,7 +359,9 @@ export default function ManageInvitesPage() {
                 fontSize: 17,
                 color: 'var(--text)',
               }}>
-                {formSuccess ? 'Invite Created!' : 'Invite a Resident'}
+                {formSuccess
+                  ? formSuccess.type === 'added' ? 'Resident Added!' : 'Invite Created!'
+                  : 'Invite a Resident'}
               </h3>
               <button
                 onClick={resetForm}
@@ -282,103 +379,173 @@ export default function ManageInvitesPage() {
             {/* Modal body */}
             <div style={{ padding: '20px 24px 24px' }}>
               {formSuccess ? (
-                /* Success state — show link to copy */
-                <div>
-                  <div style={{
-                    background: 'var(--primary-glow)',
-                    border: '1px solid color-mix(in srgb, var(--primary) 30%, transparent)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: 16,
-                    marginBottom: 16,
-                    textAlign: 'center',
-                  }}>
-                    <div style={{ fontSize: 28, marginBottom: 8 }}>✉️</div>
-                    <p style={{
-                      fontFamily: 'var(--font-body)', fontSize: 14,
-                      color: 'var(--text)', lineHeight: 1.6,
+                formSuccess.type === 'invite' ? (
+                  /* ── New user: show invite link ── */
+                  <div>
+                    <div style={{
+                      background: 'var(--primary-glow)',
+                      border: '1px solid color-mix(in srgb, var(--primary) 30%, transparent)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: 16,
+                      marginBottom: 16,
+                      textAlign: 'center',
                     }}>
-                      Invite created for <strong>{formSuccess.email}</strong>
+                      <div style={{ fontSize: 28, marginBottom: 8 }}>✉️</div>
+                      <p style={{
+                        fontFamily: 'var(--font-body)', fontSize: 14,
+                        color: 'var(--text)', lineHeight: 1.6,
+                      }}>
+                        Invite created for <strong>{formSuccess.email}</strong>
+                      </p>
+                    </div>
+
+                    <label style={{
+                      fontFamily: 'var(--font-body)', fontSize: 12,
+                      fontWeight: 600, color: 'var(--text-secondary)',
+                      display: 'block', marginBottom: 7,
+                    }}>
+                      Invite Link
+                    </label>
+                    <div style={{
+                      display: 'flex', gap: 8, marginBottom: 16,
+                    }}>
+                      <input
+                        type="text"
+                        value={getInviteLink(formSuccess.token)}
+                        readOnly
+                        style={{
+                          flex: 1,
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 11,
+                          background: 'var(--surface-alt)',
+                          cursor: 'text',
+                        }}
+                        onClick={(e) => (e.target as HTMLInputElement).select()}
+                      />
+                      <button
+                        onClick={() => copyToClipboard(formSuccess.token)}
+                        style={{
+                          padding: '10px 16px',
+                          borderRadius: 'var(--radius-md)',
+                          border: '1px solid var(--primary)',
+                          background: copiedToken === formSuccess.token
+                            ? 'var(--primary)' : 'transparent',
+                          color: copiedToken === formSuccess.token
+                            ? 'white' : 'var(--primary)',
+                          fontFamily: 'var(--font-body)',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        {copiedToken === formSuccess.token ? '✓ Copied' : 'Copy'}
+                      </button>
+                    </div>
+
+                    <p style={{
+                      fontSize: 12, color: 'var(--text-faint)',
+                      lineHeight: 1.6, marginBottom: 18,
+                    }}>
+                      Share this link with the resident via email, WhatsApp, or any other method. The link expires in 30 days.
                     </p>
-                  </div>
 
-                  <label style={{
-                    fontFamily: 'var(--font-body)', fontSize: 12,
-                    fontWeight: 600, color: 'var(--text-secondary)',
-                    display: 'block', marginBottom: 7,
-                  }}>
-                    Invite Link
-                  </label>
-                  <div style={{
-                    display: 'flex', gap: 8, marginBottom: 16,
-                  }}>
-                    <input
-                      type="text"
-                      value={getInviteLink(formSuccess.token)}
-                      readOnly
-                      style={{
-                        flex: 1,
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 11,
-                        background: 'var(--surface-alt)',
-                        cursor: 'text',
-                      }}
-                      onClick={(e) => (e.target as HTMLInputElement).select()}
-                    />
-                    <button
-                      onClick={() => copyToClipboard(formSuccess.token)}
-                      style={{
-                        padding: '10px 16px',
-                        borderRadius: 'var(--radius-md)',
-                        border: '1px solid var(--primary)',
-                        background: copiedToken === formSuccess.token
-                          ? 'var(--primary)' : 'transparent',
-                        color: copiedToken === formSuccess.token
-                          ? 'white' : 'var(--primary)',
-                        fontFamily: 'var(--font-body)',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                        transition: 'all 0.2s ease',
-                      }}
-                    >
-                      {copiedToken === formSuccess.token ? '✓ Copied' : 'Copy'}
-                    </button>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <button
+                        onClick={() => {
+                          setFormSuccess(null);
+                          setFormEmail('');
+                          setFormUnitId('');
+                          setFormRole('resident');
+                          setFormResidentType('tenant');
+                          setFormError('');
+                        }}
+                        className="btn-secondary"
+                        style={{ fontSize: 13 }}
+                      >
+                        Invite another
+                      </button>
+                      <button
+                        onClick={resetForm}
+                        className="btn-primary"
+                        style={{ fontSize: 13 }}
+                      >
+                        Done
+                      </button>
+                    </div>
                   </div>
+                ) : (
+                  /* ── Existing user: show added confirmation ── */
+                  <div>
+                    <div style={{
+                      background: 'color-mix(in srgb, var(--success) 10%, var(--surface-alt))',
+                      border: '1px solid color-mix(in srgb, var(--success) 30%, transparent)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: 20,
+                      marginBottom: 18,
+                      textAlign: 'center',
+                    }}>
+                      <div style={{ fontSize: 32, marginBottom: 10 }}>✅</div>
+                      <p style={{
+                        fontFamily: 'var(--font-body)', fontSize: 15,
+                        fontWeight: 600, color: 'var(--text)', marginBottom: 6,
+                      }}>
+                        {formSuccess.name}
+                      </p>
+                      <p style={{
+                        fontFamily: 'var(--font-body)', fontSize: 13,
+                        color: 'var(--text-muted)', lineHeight: 1.6,
+                      }}>
+                        has been added to <strong>{activeMembership?.community?.name}</strong>
+                      </p>
+                      {formSuccess.unitNumber && (
+                        <div style={{
+                          marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 6,
+                          padding: '5px 14px', borderRadius: 'var(--radius-full)',
+                          background: 'var(--surface)', border: '1px solid var(--border)',
+                          fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)',
+                        }}>
+                          🏠 {formSuccess.unitNumber}
+                        </div>
+                      )}
+                    </div>
 
-                  <p style={{
-                    fontSize: 12, color: 'var(--text-faint)',
-                    lineHeight: 1.6, marginBottom: 18,
-                  }}>
-                    Share this link with the resident via email, WhatsApp, or any other method. The link expires in 30 days.
-                  </p>
+                    <p style={{
+                      fontSize: 12, color: 'var(--text-faint)',
+                      lineHeight: 1.6, marginBottom: 18,
+                      textAlign: 'center',
+                    }}>
+                      This person already has an account. They&apos;ll see the community next time they open Nabora.
+                    </p>
 
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    <button
-                      onClick={() => {
-                        setFormSuccess(null);
-                        setFormEmail('');
-                        setFormUnitId('');
-                        setFormRole('resident');
-                        setFormResidentType('tenant');
-                        setFormError('');
-                      }}
-                      className="btn-secondary"
-                      style={{ fontSize: 13 }}
-                    >
-                      Invite another
-                    </button>
-                    <button
-                      onClick={resetForm}
-                      className="btn-primary"
-                      style={{ fontSize: 13 }}
-                    >
-                      Done
-                    </button>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <button
+                        onClick={() => {
+                          setFormSuccess(null);
+                          setFormEmail('');
+                          setFormUnitId('');
+                          setFormRole('resident');
+                          setFormResidentType('tenant');
+                          setFormError('');
+                        }}
+                        className="btn-secondary"
+                        style={{ fontSize: 13 }}
+                      >
+                        Add another
+                      </button>
+                      <button
+                        onClick={resetForm}
+                        className="btn-primary"
+                        style={{ fontSize: 13 }}
+                      >
+                        Done
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )
               ) : (
-                /* Invite form */
+                /* ── Invite form ── */
                 <form onSubmit={handleCreateInvite} style={{
                   display: 'flex', flexDirection: 'column', gap: 16,
                 }}>
@@ -415,37 +582,6 @@ export default function ManageInvitesPage() {
                     />
                   </div>
 
-                  {/* Unit dropdown */}
-                  <div>
-                    <label style={{
-                      fontFamily: 'var(--font-body)', fontSize: 12,
-                      fontWeight: 600, color: 'var(--text-secondary)',
-                      display: 'block', marginBottom: 7,
-                    }}>
-                      Unit / Flat
-                      <span style={{ color: 'var(--text-faint)', fontWeight: 400 }}> (optional)</span>
-                    </label>
-                    <select
-                      value={formUnitId}
-                      onChange={(e) => setFormUnitId(e.target.value)}
-                      style={{
-                        appearance: 'none',
-                        backgroundImage: `url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2364748B' stroke-width='1.5' fill='none'/%3E%3C/svg%3E")`,
-                        backgroundRepeat: 'no-repeat',
-                        backgroundPosition: 'right 14px center',
-                        paddingRight: 36,
-                      }}
-                    >
-                      <option value="">No unit assigned</option>
-                      {units.map((unit) => (
-                        <option key={unit.id} value={unit.id}>
-                          {unit.unit_type?.icon || ''} {unit.unit_number}
-                          {unit.unit_type ? ` · ${unit.unit_type.name}` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
                   {/* Role */}
                   <div>
                     <label style={{
@@ -463,7 +599,13 @@ export default function ManageInvitesPage() {
                         <button
                           key={opt.value}
                           type="button"
-                          onClick={() => setFormRole(opt.value as 'resident' | 'community_admin')}
+                          onClick={() => {
+                            setFormRole(opt.value as 'resident' | 'community_admin');
+                            // Clear unit validation state when switching to admin
+                            if (opt.value === 'community_admin') {
+                              setFormError('');
+                            }
+                          }}
                           style={{
                             flex: 1,
                             padding: '12px 14px',
@@ -494,6 +636,44 @@ export default function ManageInvitesPage() {
                         </button>
                       ))}
                     </div>
+                  </div>
+
+                  {/* Unit dropdown */}
+                  <div>
+                    <label style={{
+                      fontFamily: 'var(--font-body)', fontSize: 12,
+                      fontWeight: 600, color: 'var(--text-secondary)',
+                      display: 'block', marginBottom: 7,
+                    }}>
+                      Unit / Flat
+                      {formRole === 'resident' ? (
+                        <span style={{ color: 'var(--error)' }}> *</span>
+                      ) : (
+                        <span style={{ color: 'var(--text-faint)', fontWeight: 400 }}> (optional)</span>
+                      )}
+                    </label>
+                    <select
+                      value={formUnitId}
+                      onChange={(e) => setFormUnitId(e.target.value)}
+                      required={formRole === 'resident'}
+                      style={{
+                        appearance: 'none',
+                        backgroundImage: `url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2364748B' stroke-width='1.5' fill='none'/%3E%3C/svg%3E")`,
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'right 14px center',
+                        paddingRight: 36,
+                      }}
+                    >
+                      <option value="">
+                        {formRole === 'resident' ? 'Select a unit...' : 'No unit assigned'}
+                      </option>
+                      {units.map((unit) => (
+                        <option key={unit.id} value={unit.id}>
+                          {unit.unit_type?.icon || ''} {unit.unit_number}
+                          {unit.unit_type ? ` · ${unit.unit_type.name}` : ''}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Resident Type — only show when a unit is selected */}
@@ -564,7 +744,7 @@ export default function ManageInvitesPage() {
                         borderTopColor: 'white', borderRadius: '50%',
                       }} />
                     ) : (
-                      'Create Invite'
+                      formRole === 'resident' ? 'Add Resident' : 'Add Admin'
                     )}
                   </button>
                 </form>
